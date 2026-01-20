@@ -1,0 +1,35 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# data
+emnist_data/
+raw_mouse_data/
+rt_sessions/
+
+# logs
+lightning_logs
+wandb
+
+# models
+checkpoints/*
+# crazy work just to allow two checkpoints to be unignored...
+!checkpoints/mouse_finetune/ 
+checkpoints/mouse_finetune/*
+!checkpoints/mouse_finetune/best_finetune/
+!checkpoints/mouse_finetune/best_finetune/**
+!checkpoints/emnist_pretrain/
+checkpoints/emnist_pretrain/*
+!checkpoints/emnist_pretrain/best_pretrain/
+!checkpoints/emnist_pretrain/best_pretrain/**
+
+
+# misc
+.local_module_completion
