@@ -21,9 +21,13 @@ import os
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default="lstm", help="Model to use (lstm only right now)")
-    parser.add_argument("--epochs", type=int, default=25, help="Number of epochs to train for")
+    parser.add_argument("--hidden-size", type=int, default=64, help="Hidden size")
+    parser.add_argument("--num-layers", type=int, default=2, help="Number of layers")
+    parser.add_argument("--dropout", type=float, default=0.1, help="Dropout rate in LSTM")
+    parser.add_argument("--epochs", type=int, default=100, help="Number of epochs to train for")
     parser.add_argument("--seed", type=int, default=42, help="Seed to use")
-    parser.add_argument("--batch-size", type=int, default=128, help="Batch size")
+    parser.add_argument("--batch-size", type=int, default=256, help="Batch size")
+    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
     parser.add_argument("--early-stop", action="store_true", help="Enable early stopping")
     parser.add_argument("--min-delta", type=float, default=1e-3, help="Min improvement for early stopping")
     parser.add_argument("--patience", type=int, default=5, help="Epochs to wait for improvement")
@@ -45,7 +49,14 @@ def main():
     ###############################
     L.seed_everything(args.seed, workers=True)
     if args.model == "lstm":
-        model = StrokeLSTM(num_classes=53, hidden_size=64, num_layers=2, class_weights=data_module.class_weights)
+        model = StrokeLSTM(
+            num_classes=53,
+            hidden_size=args.hidden_size,
+            num_layers=args.num_layers,
+            class_weights=data_module.class_weights,
+            lr=args.lr,
+            dropout=args.dropout,
+        )
     else:
         raise ValueError(f"Model {args.model} not supported")
 
@@ -56,13 +67,13 @@ def main():
         f"{len(data_module.test_dataset)} test "
         f"(total {len(data_module.train_dataset)+len(data_module.val_dataset)+len(data_module.test_dataset)})"
     )
-    
+
     # DEBUG: print dataset composition by class
     print("Per class counts: ")
     for i, count in zip(build_char_map(), data_module.train_counts):
         print(f"Idx {i}: count {count}")
 
-    wandblogger = WandbLogger(project="str(mouse)", tags=["pretrain", "uppercase", args.model])
+    wandblogger = WandbLogger(project="str(mouse)", tags=["pretrain", "uppercase", args.model], config=args)
     ckpt = ModelCheckpoint(
         dirpath=f"checkpoints/{args.model}/pretrain/{wandblogger.experiment.name}",
         monitor="val_loss",

@@ -28,11 +28,14 @@ class StrokeLSTM(L.LightningModule):
         hidden_size=64, # control model size
         num_layers=2, # size of hidden layer stack
         class_weights=None, # for imbalanced classes
+        lr=1e-3, # learning rate
+        dropout=0.1, # dropout in LSTM
     ):
         super().__init__()
         self.save_hyperparameters()
 
         self.hidden_size = hidden_size
+        self.lr = lr
         
         if class_weights is None:
             class_weights = t.ones(num_classes, dtype=t.long)
@@ -43,7 +46,8 @@ class StrokeLSTM(L.LightningModule):
                             hidden_size,
                             num_layers,
                             bias=True,
-                            batch_first=True)
+                            batch_first=True,
+                            dropout=dropout)
         self.fcc = nn.Linear(hidden_size, num_classes)
 
     def forward(self, x: PackedSequence):
@@ -82,6 +86,6 @@ class StrokeLSTM(L.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = optim.AdamW(self.parameters(), lr=1e-2, weight_decay=1e-4)
+        optimizer = optim.AdamW(self.parameters(), lr=self.lr, weight_decay=1e-4)
 
         return optimizer

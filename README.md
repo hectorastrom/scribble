@@ -51,5 +51,7 @@ My data and checkpoints can be downloaded from a public `s3` bucket.
 To download my raw_mouse_data (as a base for finetuning):
 `aws s3 sync s3://hectorastrom-str-mouse/raw_mouse_data ./raw_mouse_data`
 
-I intend to upload checkpoints later, when there is more interesting diversity available.
+I intend to upload checkpoints later, when there is more interesting diversity
+available.
+
 ---
