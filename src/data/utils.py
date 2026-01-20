@@ -150,7 +150,7 @@ def load_chars(root_dir: str, max_trials=-1, samples_last=True, return_tensor=Tr
         root_dir:
             Directory containing trial CSV files.
         max_trials:
-            Optional cap on how many trials to load.
+            Optional cap on how many trials to load. Leave as -1 to load all trials
         samples_last:
             Controls whether the returned tensors store time in the first dimension
             (False) or the last dimension (True).

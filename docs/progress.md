@@ -55,7 +55,7 @@ intend to solve them:
 1. Images are a poor medium for rich, timeseries mouse velocity data
     - We'd be better off implementing an RNN or LSTM for this same task: super
       lightweight, and using the stroke velocity data in entirety
-    - See [third attempt](#third-attempt-using-timeseries-representations)!
+    - See [third attempt](attempt_3.md)!
 
 1. Data collection needs to scale, a lot
     - I want to make this software public, so people can use it, give the model 

@@ -11,7 +11,7 @@ from src.ml.architectures.cnn import StrokeNet
 from src.ml.architectures.lstm import StrokeLSTM
 import lightning as L
 from lightning.pytorch.loggers import WandbLogger
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 import torch as t
 import argparse
 from torch.nn.utils.rnn import pack_padded_sequence, pad_sequence, PackedSequence
@@ -24,6 +24,9 @@ def main():
     parser.add_argument("--epochs", type=int, default=25, help="Number of epochs to train for")
     parser.add_argument("--seed", type=int, default=42, help="Seed to use")
     parser.add_argument("--batch-size", type=int, default=128, help="Batch size")
+    parser.add_argument("--early-stop", action="store_true", help="Enable early stopping")
+    parser.add_argument("--min-delta", type=float, default=1e-3, help="Min improvement for early stopping")
+    parser.add_argument("--patience", type=int, default=5, help="Epochs to wait for improvement")
     args = parser.parse_args()
 
     ###############################
@@ -42,7 +45,7 @@ def main():
     ###############################
     L.seed_everything(args.seed, workers=True)
     if args.model == "lstm":
-        model = StrokeLSTM(num_classes=53, hidden_size=64, num_layers=2)
+        model = StrokeLSTM(num_classes=53, hidden_size=64, num_layers=2, class_weights=data_module.class_weights)
     else:
         raise ValueError(f"Model {args.model} not supported")
 
@@ -53,6 +56,11 @@ def main():
         f"{len(data_module.test_dataset)} test "
         f"(total {len(data_module.train_dataset)+len(data_module.val_dataset)+len(data_module.test_dataset)})"
     )
+    
+    # DEBUG: print dataset composition by class
+    print("Per class counts: ")
+    for i, count in zip(build_char_map(), data_module.train_counts):
+        print(f"Idx {i}: count {count}")
 
     wandblogger = WandbLogger(project="str(mouse)", tags=["pretrain", "uppercase", args.model])
     ckpt = ModelCheckpoint(
@@ -63,6 +71,16 @@ def main():
         save_last=True,
         filename="best",
     )
+    callbacks = [ckpt]
+    if args.early_stop:
+        callbacks.append(
+            EarlyStopping(
+                monitor="val_loss",
+                mode="min",
+                min_delta=args.min_delta,
+                patience=args.patience,
+            )
+        )
 
     trainer = L.Trainer(
         min_epochs=5,
@@ -72,7 +90,7 @@ def main():
         limit_val_batches=1.0,
         logger=wandblogger,
         enable_checkpointing=True,
-        callbacks=[ckpt],
+        callbacks=callbacks,
         check_val_every_n_epoch=1,
     )
     trainer.fit(model, datamodule=data_module)
@@ -101,11 +119,9 @@ class VariableSequenceDataset(Dataset):
 
 
 class RawMouseDataModule(L.LightningDataModule):
-
     def __init__(
         self,
         cache_dir=RAW_MOUSE_DATA_DIR,
-        max_trials=-1,
         T_max=200,  # 200*10ms sample = 2s per char
         batch_size=128,
         num_workers=0,
@@ -123,23 +139,8 @@ class RawMouseDataModule(L.LightningDataModule):
         self.seed = seed
         # use shared char map from utils
         self.char_map = build_char_map()
-
-        # find character with min trials if max_trials <=0
-        self.max_trials = max_trials
-        min_trial_char = None
-        if self.max_trials <= 0:
-            self.max_trials = float("inf")
-            for char in build_inverse_char_map().keys():
-                char_name = char_to_folder_name(char)
-                char_dir = os.path.join(self.cache_dir, char_name)
-                num_trials = len(os.listdir(char_dir))
-                if num_trials < self.max_trials:
-                    self.max_trials = num_trials
-                    min_trial_char = char
-            print(
-                f"Using min trials across characters: {self.max_trials} (from '{min_trial_char}')"
-            )
-
+        self.class_weights = None
+    
     def setup(self, stage=None):
         """
         Prepare dataset:
@@ -156,7 +157,7 @@ class RawMouseDataModule(L.LightningDataModule):
 
             _, trials = load_chars(
                 f"{self.cache_dir}/{folder_name}",
-                max_trials=self.max_trials,
+                max_trials=-1,
                 samples_last=False,  # (T, 2)
                 return_tensor=True,
                 silent=True,
@@ -190,6 +191,17 @@ class RawMouseDataModule(L.LightningDataModule):
             [train_size, val_size, test_size],
             generator=t.Generator().manual_seed(self.seed)
         )
+        
+        self.train_counts = self._count_labels(self.train_dataset, len(self.char_map))
+        self.class_weights = 1.0 / self.train_counts.float() # tensor
+        self.class_weights = self.class_weights / self.class_weights.mean()
+    
+    @staticmethod
+    def _count_labels(subset, num_classes):
+        counts = t.zeros(num_classes, dtype=t.long)
+        for _, _, y in subset:
+            counts[y] += 1
+        return counts
 
     @staticmethod
     def collate_packed(batch) -> tuple[PackedSequence, t.Tensor]:

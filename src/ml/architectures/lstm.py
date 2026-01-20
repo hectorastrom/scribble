@@ -26,12 +26,19 @@ class StrokeLSTM(L.LightningModule):
         self, 
         num_classes: int = 53, 
         hidden_size=64, # control model size
-        num_layers=2 # size of hidden layer stack
+        num_layers=2, # size of hidden layer stack
+        class_weights=None, # for imbalanced classes
     ):
         super().__init__()
         self.save_hyperparameters()
 
         self.hidden_size = hidden_size
+        
+        if class_weights is None:
+            class_weights = t.ones(num_classes, dtype=t.long)
+            
+        self.class_weights = class_weights
+        
         self.lstm = nn.LSTM(2,
                             hidden_size,
                             num_layers,
@@ -50,7 +57,8 @@ class StrokeLSTM(L.LightningModule):
     def training_step(self, batch, batch_idx):
         x, labels = batch
         logits = self(x)
-        loss = nn.CrossEntropyLoss()(logits, labels)
+        class_weights = self.class_weights.to(logits.device)
+        loss = nn.CrossEntropyLoss(weight=class_weights)(logits, labels)
         self.log("train_loss", loss)
         return loss
 
@@ -74,6 +82,6 @@ class StrokeLSTM(L.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = optim.AdamW(self.parameters(), lr=1e-3, weight_decay=1e-4)
+        optimizer = optim.AdamW(self.parameters(), lr=1e-2, weight_decay=1e-4)
 
         return optimizer
