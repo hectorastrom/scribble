@@ -1,11 +1,8 @@
 <!--
-  str(mouse) Embeddable Widget
+  str(mouse) Embeddable Widget - Apple Watch Scribble Style
 
-  This widget can be embedded in any blog post or webpage.
-  It sends mouse velocity data to the API and displays predictions.
-
-  Usage: Copy this HTML into your blog post, or include via iframe.
-  Configure API_BASE to point to your deployed API (e.g., https://api.hectorastrom.com)
+  Features a grid of dots that light up as you draw, then coalesce
+  toward the center when a character is recognized.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -63,21 +60,37 @@
 
       .strmouse-output {
         font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Mono", "Droid Sans Mono", monospace;
-        font-size: 14px;
+        font-size: 16px;
         background: #f8f8f8;
         border: 1px solid #e0e0e0;
         border-radius: 4px;
         padding: 8px 12px;
-        min-width: 200px;
+        min-width: 240px;
         max-width: 400px;
-        min-height: 24px;
+        min-height: 28px;
         word-wrap: break-word;
         color: #333;
+        letter-spacing: 0.5px;
       }
 
       .strmouse-output:empty::before {
         content: "Start drawing...";
         color: #999;
+      }
+
+      .strmouse-output .new-char {
+        animation: charPop 0.3s ease-out;
+      }
+
+      @keyframes charPop {
+        0% {
+          color: #14428B;
+          transform: scale(1.3);
+        }
+        100% {
+          color: #333;
+          transform: scale(1);
+        }
       }
 
       .strmouse-stats-row {
@@ -100,7 +113,7 @@
         font-size: 12px;
         text-align: right;
         color: #666;
-        min-width: 140px;
+        min-width: 120px;
       }
 
       .strmouse-stats span {
@@ -119,34 +132,17 @@
         width: 100%;
         height: auto;
         display: block;
-        background: #ffffff;
-        border: 1px solid #c0c0c0;
+        background: #fafafa;
+        border: 1px solid #e0e0e0;
         border-radius: 6px;
         cursor: crosshair;
         touch-action: none;
       }
 
       .strmouse-hint {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
         margin-top: 10px;
         font-size: 12px;
         color: #888;
-      }
-
-      .strmouse-clear-btn {
-        background: #f0f0f0;
-        border: 1px solid #d0d0d0;
-        border-radius: 4px;
-        padding: 4px 10px;
-        font-size: 12px;
-        cursor: pointer;
-        color: #555;
-      }
-
-      .strmouse-clear-btn:hover {
-        background: #e8e8e8;
       }
 
       .strmouse-error {
@@ -172,7 +168,7 @@
         <div class="strmouse-output" id="strmouseOutput"></div>
         <div class="strmouse-stats-row">
           <div class="strmouse-preview">
-            <img id="strmousePreview" alt="preview" />
+            <img id="strmousePreview" alt="preview" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" />
           </div>
           <div class="strmouse-stats">
             <span>conf: <span id="strmouseConfidence">--</span></span>
@@ -183,10 +179,7 @@
 
       <div class="strmouse-canvas-wrap">
         <canvas id="strmouseCanvas" class="strmouse-canvas" width="640" height="360"></canvas>
-        <div class="strmouse-hint">
-          <span>Move mouse over canvas to draw. Pause briefly between characters.</span>
-          <button class="strmouse-clear-btn" id="strmouseClear">Clear Output</button>
-        </div>
+        <div class="strmouse-hint">Move mouse over canvas to draw. Pause briefly between characters.</div>
         <div class="strmouse-error" id="strmouseError"></div>
       </div>
     </div>
@@ -194,11 +187,24 @@
     <script>
       (function () {
         // ============================================================
-        // CONFIGURATION - Auto-detects local vs production
+        // CONFIGURATION
         // ============================================================
         const isLocal = window.location.hostname === "localhost" ||
                         window.location.hostname === "127.0.0.1";
         const API_BASE = isLocal ? "" : "https://api.hectorastrom.com";
+
+        // Grid settings
+        const GRID_SPACING = 6;
+        const DOT_RADIUS = 1;
+        const DOT_COLOR_IDLE = "rgba(180, 180, 180, 0.4)";
+        const DOT_COLOR_LIT = "#14428B";
+        const ACTIVATION_RADIUS = 4;
+
+        // Animation settings
+        const COALESCE_DURATION_MS = 250;
+        const POUR_OUT_DURATION_MS = 100;
+        const COALESCE_EASING = (t) => 1 - Math.pow(1 - t, 3); // ease-out cubic
+
         // ============================================================
 
         const canvas = document.getElementById("strmouseCanvas");
@@ -207,12 +213,11 @@
         const confidenceEl = document.getElementById("strmouseConfidence");
         const inferenceEl = document.getElementById("strmouseInference");
         const previewImg = document.getElementById("strmousePreview");
-        const clearBtn = document.getElementById("strmouseClear");
         const errorEl = document.getElementById("strmouseError");
 
         // Sampling configuration
         const sampleIntervalMs = 10;
-        const inactivityMs = 250;
+        const inactivityMs = 300;
         const minSamples = 3;
 
         // State
@@ -220,26 +225,295 @@
         let samplingTimer = null;
         let currentPos = null;
         let lastLoggedPos = null;
+        let lastCursorPos = null; // For interpolating dot highlights
         let lastMoveTime = 0;
-        let velocities = []; // Store velocity objects directly
-        let lastDrawPos = null;
-        let flashAnimationId = null;
-        let flashStartTime = 0;
+        let recordingStartTime = 0;
+        let velocities = [];
         let decodedOutput = "";
+        const MAX_OUTPUT_CHARS = 21;
+        const MAX_STROKE_DURATION_MS = 2000; // don't send any stroke longer than this
 
-        function clearCanvas() {
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Grid state
+        let dots = [];
+        let litDots = new Set();
+        let animatingDots = [];
+        let animationId = null;
+        let isAnimating = false;
+
+        // Initialize dot grid
+        function initGrid() {
+          dots = [];
+          const cols = Math.floor((canvas.width - GRID_SPACING) / GRID_SPACING);
+          const rows = Math.floor((canvas.height - GRID_SPACING) / GRID_SPACING);
+          const offsetX = (canvas.width - cols * GRID_SPACING) / 2;
+          const offsetY = (canvas.height - rows * GRID_SPACING) / 2;
+
+          for (let row = 0; row <= rows; row++) {
+            for (let col = 0; col <= cols; col++) {
+              dots.push({
+                x: offsetX + col * GRID_SPACING,
+                y: offsetY + row * GRID_SPACING,
+                col,
+                row,
+                lit: false,
+              });
+            }
+          }
         }
 
-        function drawLine(from, to) {
-          ctx.strokeStyle = "#111111";
-          ctx.lineWidth = 2;
-          ctx.lineCap = "round";
+        function drawDot(x, y, color, radius = DOT_RADIUS) {
           ctx.beginPath();
-          ctx.moveTo(from.x, from.y);
-          ctx.lineTo(to.x, to.y);
-          ctx.stroke();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+        }
+
+        function renderGrid() {
+          ctx.fillStyle = "#fafafa";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          for (const dot of dots) {
+            if (!litDots.has(dot)) {
+              drawDot(dot.x, dot.y, DOT_COLOR_IDLE);
+            }
+          }
+
+          // Draw lit dots on top
+          for (const dot of litDots) {
+            drawDot(dot.x, dot.y, DOT_COLOR_LIT, DOT_RADIUS + 1);
+          }
+        }
+
+        function renderAnimatingDots() {
+          ctx.fillStyle = "#fafafa";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // Draw idle grid
+          for (const dot of dots) {
+            drawDot(dot.x, dot.y, DOT_COLOR_IDLE);
+          }
+
+          // Draw animating dots
+          for (const ad of animatingDots) {
+            const alpha = 1 - ad.progress * 0.3;
+            ctx.globalAlpha = alpha;
+            drawDot(ad.currentX, ad.currentY, DOT_COLOR_LIT, DOT_RADIUS + 1);
+          }
+          ctx.globalAlpha = 1;
+        }
+
+        function lightUpNearbyDots(x, y) {
+          for (const dot of dots) {
+            if (litDots.has(dot)) continue;
+            const dx = dot.x - x;
+            const dy = dot.y - y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist <= ACTIVATION_RADIUS) {
+              dot.lit = true;
+              litDots.add(dot);
+            }
+          }
+        }
+
+        // Light up dots along a line from (x1,y1) to (x2,y2)
+        function lightUpDotsAlongPath(x1, y1, x2, y2) {
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist === 0) {
+            lightUpNearbyDots(x1, y1);
+            return;
+          }
+
+          // Sample points along the path at intervals smaller than ACTIVATION_RADIUS
+          const stepSize = ACTIVATION_RADIUS * 0.5;
+          const steps = Math.ceil(dist / stepSize);
+
+          for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const x = x1 + dx * t;
+            const y = y1 + dy * t;
+            lightUpNearbyDots(x, y);
+          }
+        }
+
+        function clearLitDots() {
+          for (const dot of dots) {
+            dot.lit = false;
+          }
+          litDots.clear();
+          animatingDots = [];
+          if (animationId) {
+            cancelAnimationFrame(animationId);
+            animationId = null;
+          }
+          isAnimating = false;
+        }
+
+        // Calculate grid-constrained path from start to target
+        function calculateGridPath(startX, startY, startCol, startRow, targetX, targetY) {
+          // Find the target column (center top of canvas)
+          const cols = Math.floor((canvas.width - GRID_SPACING) / GRID_SPACING);
+          const targetCol = Math.floor(cols / 2);
+          const targetRow = 2; // Near top
+
+          const offsetX = (canvas.width - cols * GRID_SPACING) / 2;
+          const offsetY = (canvas.height - Math.floor((canvas.height - GRID_SPACING) / GRID_SPACING) * GRID_SPACING) / 2;
+
+          // Create waypoints: first move horizontally, then vertically
+          const waypoints = [];
+
+          // Current position
+          waypoints.push({ x: startX, y: startY });
+
+          // Move horizontally to target column
+          const midX = offsetX + targetCol * GRID_SPACING;
+          if (Math.abs(startCol - targetCol) > 0) {
+            waypoints.push({ x: midX, y: startY });
+          }
+
+          // Move vertically to target row
+          const finalY = offsetY + targetRow * GRID_SPACING;
+          waypoints.push({ x: midX, y: finalY });
+
+          return waypoints;
+        }
+
+        function startCoalesceAnimation() {
+          if (litDots.size === 0) return;
+
+          isAnimating = true;
+          animatingDots = [];
+
+          // Target: horizontal center line near top
+          const targetX = canvas.width / 2;
+          const targetY = GRID_SPACING * 4;
+
+          for (const dot of litDots) {
+            const waypoints = calculateGridPath(
+              dot.x, dot.y, dot.col, dot.row,
+              targetX, targetY
+            );
+
+            // Calculate total distance for this path
+            let totalDist = 0;
+            for (let i = 1; i < waypoints.length; i++) {
+              const dx = waypoints[i].x - waypoints[i - 1].x;
+              const dy = waypoints[i].y - waypoints[i - 1].y;
+              totalDist += Math.sqrt(dx * dx + dy * dy);
+            }
+
+            // Add slight delay based on distance from center (creates wave effect)
+            const distFromTarget = Math.sqrt(
+              Math.pow(dot.x - targetX, 2) + Math.pow(dot.y - targetY, 2)
+            );
+            const maxDist = Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height) / 2;
+            const delayFactor = (distFromTarget / maxDist) * 0.3;
+
+            animatingDots.push({
+              startX: dot.x,
+              startY: dot.y,
+              currentX: dot.x,
+              currentY: dot.y,
+              waypoints,
+              totalDist,
+              progress: 0,
+              delay: delayFactor,
+              coalesceY: waypoints[waypoints.length - 1].y, // Store the final Y from coalesce phase
+            });
+          }
+
+          const startTime = performance.now();
+          let phase = 1; // 1 = coalesce, 2 = pour out
+          let phase2StartTime = null;
+
+          function animate(now) {
+            const elapsed = now - startTime;
+
+            if (phase === 1) {
+              // Phase 1: Coalesce to center line
+              const baseProgress = Math.min(1, elapsed / COALESCE_DURATION_MS);
+              let allDone = true;
+
+              for (const ad of animatingDots) {
+                // Apply individual delay
+                const adjustedProgress = Math.max(0, (baseProgress - ad.delay) / (1 - ad.delay));
+                ad.progress = COALESCE_EASING(Math.min(1, adjustedProgress));
+
+                if (ad.progress < 1) {
+                  allDone = false;
+                }
+
+                // Calculate position along path
+                const targetDist = ad.progress * ad.totalDist;
+                let traveled = 0;
+
+                for (let i = 1; i < ad.waypoints.length; i++) {
+                  const dx = ad.waypoints[i].x - ad.waypoints[i - 1].x;
+                  const dy = ad.waypoints[i].y - ad.waypoints[i - 1].y;
+                  const segmentDist = Math.sqrt(dx * dx + dy * dy);
+
+                  if (traveled + segmentDist >= targetDist) {
+                    const segmentProgress = segmentDist > 0 ? (targetDist - traveled) / segmentDist : 0;
+                    ad.currentX = ad.waypoints[i - 1].x + dx * segmentProgress;
+                    ad.currentY = ad.waypoints[i - 1].y + dy * segmentProgress;
+                    break;
+                  }
+                  traveled += segmentDist;
+                }
+
+                // Snap to final position if done
+                if (ad.progress >= 1) {
+                  const last = ad.waypoints[ad.waypoints.length - 1];
+                  ad.currentX = last.x;
+                  ad.currentY = last.y;
+                }
+              }
+
+              renderAnimatingDots();
+
+              if (allDone) {
+                // Transition to phase 2
+                phase = 2;
+                phase2StartTime = now;
+                // Store current positions as starting points for phase 2
+                for (const ad of animatingDots) {
+                  ad.phase2StartX = ad.currentX;
+                  ad.phase2StartY = ad.currentY;
+                  ad.progress = 0;
+                }
+              }
+
+              animationId = requestAnimationFrame(animate);
+            } else if (phase === 2) {
+              // Phase 2: Pour out - move dots up and out of canvas
+              const phase2Elapsed = now - phase2StartTime;
+              const baseProgress = Math.min(1, phase2Elapsed / POUR_OUT_DURATION_MS);
+              const easedProgress = COALESCE_EASING(baseProgress);
+
+              // Target Y is above the canvas (negative)
+              const exitY = -DOT_RADIUS * 4;
+
+              for (const ad of animatingDots) {
+                ad.progress = easedProgress;
+                ad.currentX = ad.phase2StartX; // Keep X constant
+                ad.currentY = ad.phase2StartY + (exitY - ad.phase2StartY) * easedProgress;
+              }
+
+              renderAnimatingDots();
+
+              if (baseProgress < 1) {
+                animationId = requestAnimationFrame(animate);
+              } else {
+                // Animation complete - reset
+                clearLitDots();
+                renderGrid();
+              }
+            }
+          }
+
+          animationId = requestAnimationFrame(animate);
         }
 
         function showError(msg) {
@@ -260,7 +534,9 @@
           velocities = [];
           currentPos = { x: pos.x, y: pos.y };
           lastLoggedPos = { x: pos.x, y: pos.y };
+          lastCursorPos = { x: pos.x, y: pos.y };
           lastMoveTime = performance.now();
+          recordingStartTime = performance.now();
           startSampling();
         }
 
@@ -270,51 +546,11 @@
           const vx = currentPos.x - lastLoggedPos.x;
           const vy = currentPos.y - lastLoggedPos.y;
           lastLoggedPos = { x: currentPos.x, y: currentPos.y };
-
-          // Store velocity as object for JSON API
           velocities.push({ vx, vy });
 
           if (performance.now() - lastMoveTime >= inactivityMs && velocities.length >= minSamples) {
             stopRecording();
           }
-        }
-
-        function cancelFlash() {
-          if (flashAnimationId) {
-            cancelAnimationFrame(flashAnimationId);
-            flashAnimationId = null;
-          }
-        }
-
-        function flashLetter(letter) {
-          if (!letter) return;
-          cancelFlash();
-          flashStartTime = performance.now();
-          const durationMs = 400;
-          const fontSize = Math.min(canvas.width, canvas.height) * 0.6;
-
-          function animate(now) {
-            const elapsed = now - flashStartTime;
-            const t = Math.min(1, elapsed / durationMs);
-            clearCanvas();
-            ctx.save();
-            ctx.globalAlpha = 1 - t;
-            ctx.fillStyle = "#111111";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
-            ctx.fillText(letter, canvas.width / 2, canvas.height / 2);
-            ctx.restore();
-
-            if (t < 1) {
-              flashAnimationId = requestAnimationFrame(animate);
-            } else {
-              flashAnimationId = null;
-              clearCanvas();
-            }
-          }
-
-          flashAnimationId = requestAnimationFrame(animate);
         }
 
         async function stopRecording() {
@@ -323,18 +559,27 @@
             clearInterval(samplingTimer);
             samplingTimer = null;
           }
-          if (velocities.length === 0) return;
 
-          cancelFlash();
-          clearCanvas();
+          const vels = velocities;
+          if (vels.length === 0) return;
+
+          // Check if stroke took too long (> 3 seconds) - discard if so
+          const strokeDuration = performance.now() - recordingStartTime;
+          if (strokeDuration > MAX_STROKE_DURATION_MS) {
+            clearLitDots();
+            renderGrid();
+            velocities = [];
+            return;
+          }
+
+          // Start the coalesce animation immediately
+          startCoalesceAnimation();
 
           try {
             const response = await fetch(`${API_BASE}/predict`, {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ velocities }),
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ velocities: vels }),
             });
 
             if (!response.ok) {
@@ -344,10 +589,16 @@
 
             const data = await response.json();
 
-            // Update UI
-            flashLetter(data.predicted_char);
+            // Update output with animation (keep only last MAX_OUTPUT_CHARS)
             decodedOutput += data.predicted_char;
-            outputEl.textContent = decodedOutput;
+            const displayOutput = decodedOutput.slice(-MAX_OUTPUT_CHARS);
+            outputEl.innerHTML = displayOutput.slice(0, -1) +
+              `<span class="new-char">${data.predicted_char}</span>`;
+
+            // Remove animation class after it plays
+            setTimeout(() => {
+              outputEl.textContent = decodedOutput.slice(-MAX_OUTPUT_CHARS);
+            }, 300);
 
             if (typeof data.confidence === "number") {
               confidenceEl.textContent = `${data.confidence.toFixed(1)}%`;
@@ -358,13 +609,13 @@
             if (data.image_data_url) {
               previewImg.src = data.image_data_url;
             }
+            errorEl.classList.remove("visible");
           } catch (error) {
             console.error("Prediction failed:", error);
             showError(`Error: ${error.message}`);
           }
 
           velocities = [];
-          lastDrawPos = null;
         }
 
         function getCanvasPos(event) {
@@ -372,7 +623,6 @@
           const scaleX = canvas.width / rect.width;
           const scaleY = canvas.height / rect.height;
 
-          // Support both mouse and touch events
           const clientX = event.touches ? event.touches[0].clientX : event.clientX;
           const clientY = event.touches ? event.touches[0].clientY : event.clientY;
 
@@ -386,42 +636,40 @@
           event.preventDefault();
           const pos = getCanvasPos(event);
 
-          if (!recordingActive) {
-            cancelFlash();
-            startRecording(pos);
+          // If animating, interrupt the animation and start fresh
+          if (isAnimating) {
+            clearLitDots();
           }
+
+          if (!recordingActive) {
+            clearLitDots();
+            startRecording(pos);
+            lightUpNearbyDots(pos.x, pos.y);
+          } else {
+            // Interpolate dots along path from last position to current
+            lightUpDotsAlongPath(lastCursorPos.x, lastCursorPos.y, pos.x, pos.y);
+          }
+
           currentPos = { x: pos.x, y: pos.y };
+          lastCursorPos = { x: pos.x, y: pos.y };
           lastMoveTime = performance.now();
 
-          if (lastDrawPos) {
-            drawLine(lastDrawPos, pos);
-          }
-          lastDrawPos = { x: pos.x, y: pos.y };
+          renderGrid();
         }
 
         function handleLeave() {
-          lastDrawPos = null;
+          // Don't do anything special on leave
         }
 
-        // Mouse events
+        // Event listeners
         canvas.addEventListener("mousemove", handleMove);
         canvas.addEventListener("mouseleave", handleLeave);
-
-        // Touch events for mobile
         canvas.addEventListener("touchmove", handleMove, { passive: false });
         canvas.addEventListener("touchend", handleLeave);
 
-        // Clear button
-        clearBtn.addEventListener("click", () => {
-          decodedOutput = "";
-          outputEl.textContent = "";
-          confidenceEl.textContent = "--";
-          inferenceEl.textContent = "--";
-          previewImg.src = "";
-        });
-
         // Initialize
-        clearCanvas();
+        initGrid();
+        renderGrid();
       })();
     </script>
   </body>

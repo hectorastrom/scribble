@@ -33,3 +33,5 @@ checkpoints/emnist_pretrain/*
 
 # misc
 .local_module_completion
+CLAUDE.md
+.claude
