@@ -41,32 +41,24 @@ computers for those with physical disabilities or those with fine motor
 impairments.
 
 **scribble** could also become a cool tool for everyone else. Effectively,
-this software transforms the mouse into an additional input medium (e.g. for 
-executing a macro or a bunch of on-device gestures!)
+this software transforms the mouse into an additional input medium (imagine
+being able to quickly execute a macro with a swipe of your mouse!)
 
 Here are what I think the biggest limitations of **scribble** are, and how I
 intend to solve them:
-1. Character recognition is best paired with natural language parser
-    - We could pair the outputs & confidence levels from mouse to char with a
-      language model, which votes on the plausability of certain strings based
-      on its knowledge of complete words. To make this fast & on device is the
-      challenge. 
-
 1. Images are a poor medium for rich, timeseries mouse velocity data
-    - We'd be better off implementing an RNN or LSTM for this same task: super
-      lightweight, and using the stroke velocity data in entirety
-    - See [third attempt](attempt_3.md)!
+    - See this [third attempt](attempt_3.md)!
+    
+1. Character recognition is best paired with natural language parser
+    - Pair the outputs & confidence levels from scribble with a
+      language model, which votes on the plausability of certain strings based
+      on its knowledge of complete words. 
+   - Making this fast & on device is the real challenge. I actually think this
+     is a hard problem.
 
 1. Data collection needs to scale, a lot
-    - I want to make this software public, so people can use it, give the model 
-    feedback (training data), and massively scale data collection from just
-    myself.
-    - Could also add an online platform and send to my friends for a quick boost
-
-As a personal interest, I'd love to add a UI to decode characters in real time, similar to Apple's
-Scribble. 
-
-<img src="apple_scribble.png" width=350 alt="Apple Watch Scribble">
+    - Make this software public & directly useful to automate large-scale data collection, so that people will want to
+      use it give the model feedback (training data)
 
 
 # TODO
