@@ -132,18 +132,33 @@ def main():
             y_n = "x"
             while y_n not in ("y", "n"):
                 y_n = input("Is this correct? (Y/N): ").lower()
+                
+            # change: we'll also save good samples just to maximize data
             if y_n == "y":
-                print("Awesome, all good there.")
-                # we'll remove chars we got right to only keep tricky examples
-                # in our dataset
+                print("Awesome! I'll remember that.")
+                chars_to_keep[i] = pred_char  # i : char
             else:
                 print("What was the correct char?")
-                correct = input("(a-z, A-Z, or space): ").strip()
+                correct = confirm_correct_input(inv_char_map)
                 print("Thanks! I'll remember that.")
                 chars_to_keep[i] = correct  # i : char
             print("----")
 
         clean_up_files(all_chars, chars_to_keep, training_samples_folder="raw_mouse_data")
+
+
+def confirm_correct_input(inv_char_map):
+    correct = None
+    while correct is None:
+        user_input = input("(a-z, A-Z, 0-9, or 'space'): ").strip()
+        # handle 'space' as special input
+        if user_input.lower() == "space":
+            correct = " "
+        elif len(user_input) == 1 and user_input in inv_char_map:
+            correct = user_input
+        else:
+            print(f"Invalid input '{user_input}'. Enter a single character (a-z, A-Z, 0-9) or 'space'.")
+    return correct
 
 
 def clean_up_files(all_chars : list, chars_to_keep : dict = dict(), training_samples_folder="raw_mouse_data"):
