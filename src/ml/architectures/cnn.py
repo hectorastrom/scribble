@@ -10,16 +10,24 @@ import lightning as L
 
 class StrokeNet(L.LightningModule):
     """
-    Lightning CNN for classifying continuous mouse strokes into letters (a-z, A-Z) and space.
+    Lightning CNN for classifying mouse strokes into characters.
 
     Input: Bx1x28x28 tensor
-    Output: logits over num_classes (pretrain: 27 for lowercase+space, finetune: 53 for full charset)
-    
-    Pretrain with 27 classes (EMNIST lowercase), then call replace_classifier(53) for finetuning.
+    Output: logits over num_classes
+
+    Training approach:
+        - Pretrain: 62 classes (EMNIST ByClass: a-z, A-Z, 0-9)
+        - Finetune: Discard head, create new 63+ class head (adds space, future custom strokes)
+
+    Index scheme for finetune (63 base classes):
+        a-z: 0-25, A-Z: 26-51, 0-9: 52-61, space: 62
     """
-    def __init__(self, num_classes: int = 53, dropout_p: float = 0.10, finetune=False):
+    def __init__(self, num_classes: int = 63, dropout_p: float = 0.10, finetune=False, class_weights=None):
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["class_weights"])
+        
+        # class_weights for handling imbalanced datasets (set after init or via set_class_weights)
+        self.class_weights = class_weights
 
         self.block1 = nn.Sequential(
             nn.Conv2d(1, 16, kernel_size=3, padding=1, bias=False),
@@ -85,9 +93,18 @@ class StrokeNet(L.LightningModule):
     def training_step(self, batch, batch_idx):
         images, labels = batch
         logits = self(images)
-        loss = nn.CrossEntropyLoss()(logits, labels)
+        # use class weights if provided (for imbalanced datasets)
+        if self.class_weights is not None:
+            weights = self.class_weights.to(logits.device)
+            loss = nn.CrossEntropyLoss(weight=weights)(logits, labels)
+        else:
+            loss = nn.CrossEntropyLoss()(logits, labels)
         self.log('train_loss', loss)
         return loss
+    
+    def set_class_weights(self, class_weights):
+        """Set class weights for handling imbalanced datasets."""
+        self.class_weights = class_weights
 
     def validation_step(self, batch, batch_idx):
         images, labels = batch

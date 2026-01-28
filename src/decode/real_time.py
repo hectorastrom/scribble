@@ -24,6 +24,7 @@ from src.data.utils import (
     csv_to_numpy,
     velocities_to_positions,
     GlobalInputManager,
+    NUM_FINETUNE_CLASSES,
 )
 from src.ml.architectures.cnn import StrokeNet
 from src.ml.utils import forward_pass
@@ -53,7 +54,7 @@ def main():
     input_manager = GlobalInputManager()
     model = StrokeNet.load_from_checkpoint(
         f"checkpoints/mouse_finetune/{args.ckpt}/best.ckpt",
-        num_classes=53,
+        num_classes=NUM_FINETUNE_CLASSES,
     )
     model.eval()
     char_map = build_char_map()

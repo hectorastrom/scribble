@@ -21,7 +21,7 @@ Script to collect carefully labeled mouse velocity data for finetuning
 5. Save recording in folder corresponding to prompted letter as CSV file
 6. Log that character was saved, and that a new trial is ready (press space
    to begin)
-7. Continue until all NUM_TRIALS * NUM_CHARACTERS (53) characters have been saved
+7. Continue until all NUM_TRIALS * NUM_CHARACTERS (63) characters have been saved
 """
 
 import os

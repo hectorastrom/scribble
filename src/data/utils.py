@@ -16,6 +16,13 @@ import os
 
 RAW_MOUSE_DATA_DIR = "raw_mouse_data"
 
+# Character set configuration (enables future custom strokes)
+# Index scheme for finetuning (63 classes):
+#   a-z: 0-25, A-Z: 26-51, 0-9: 52-61, space: 62
+# Pretraining uses 62 classes (no space - not in EMNIST ByClass)
+NUM_PRETRAIN_CLASSES = 62  # a-z, A-Z, 0-9 from EMNIST ByClass
+NUM_FINETUNE_CLASSES = 63  # base count: adds space; can grow with custom strokes
+
 
 def generate_trial_filename() -> str:
     """
@@ -29,26 +36,36 @@ def generate_trial_filename() -> str:
 
 def build_char_map():
     """
-    Return a dict of {logit idx : char}
+    Return a dict of {logit idx : char} for the full finetune character set.
     
-    Contains a-z (0-25), A-Z (26-51), and ' ' (52)
+    Index scheme (63 classes total):
+        a-z: indices 0-25
+        A-Z: indices 26-51
+        0-9: indices 52-61
+        space: index 62
     """
-    lower_map = {i: chr(ord("a") + i) for i in range(26)}  # lowercase 0-25
-    upper_map = {i + 26: chr(ord("A") + i) for i in range(26)}  # uppercase 26-51
-    char_map = lower_map | upper_map
-    char_map[52] = " "  # space at index 52
+    lower_map = {i: chr(ord("a") + i) for i in range(26)}  # a-z -> 0-25
+    upper_map = {i + 26: chr(ord("A") + i) for i in range(26)}  # A-Z -> 26-51
+    digit_map = {i + 52: chr(ord("0") + i) for i in range(10)}  # 0-9 -> 52-61
+    char_map = lower_map | upper_map | digit_map
+    char_map[62] = " "  # space at index 62
     return char_map
 
 def build_inverse_char_map():
     """
-    Return dict of {char : logit idx}
+    Return dict of {char : logit idx} for the full finetune character set.
     
-    Contains 0-52, where 0-25 are a-z, 26-51 are A-Z, and 52 is ' '
+    Index scheme (63 classes total):
+        a-z -> indices 0-25
+        A-Z -> indices 26-51
+        0-9 -> indices 52-61
+        space -> index 62
     """
     lower_map = {chr(i + ord('a')): i for i in range(26)}  # a-z -> 0-25
     upper_map = {chr(i + ord("A")): i + 26 for i in range(26)}  # A-Z -> 26-51
-    inverted_map = lower_map | upper_map
-    inverted_map[' '] = 52  # space at index 52
+    digit_map = {chr(i + ord("0")): i + 52 for i in range(10)}  # 0-9 -> 52-61
+    inverted_map = lower_map | upper_map | digit_map
+    inverted_map[' '] = 62  # space at index 62
     return inverted_map
 
 
@@ -56,12 +73,18 @@ def char_to_folder_name(char: str) -> str:
     """
     Convert a character to its folder name for raw_mouse_data storage.
     
-    Mac filesystems are case-insensitive, so uppercase uses uA, uB, etc. prefix.
+    Folder naming conventions (to avoid filesystem issues):
+        space -> 'space'
+        uppercase A-Z -> 'uA', 'uB', etc. (case-insensitive filesystem safety)
+        digits 0-9 -> 'd0', 'd1', etc. (avoid numeric folder names)
+        lowercase a-z -> 'a', 'b', etc.
     """
     if char == ' ':
         return 'space'
     elif char.isupper():
         return f"u{char}"
+    elif char.isdigit():
+        return f"d{char}"
     else:  # lowercase
         return char
 
@@ -70,12 +93,18 @@ def folder_name_to_char(folder: str) -> str:
     """
     Convert a folder name back to its character.
     
-    Inverse of char_to_folder_name.
+    Inverse of char_to_folder_name:
+        'space' -> ' '
+        'uA'-'uZ' -> 'A'-'Z'
+        'd0'-'d9' -> '0'-'9'
+        'a'-'z' -> 'a'-'z'
     """
     if folder == 'space':
         return ' '
     elif folder.startswith('u') and len(folder) == 2:
         return folder[1]  # uppercase letter
+    elif folder.startswith('d') and len(folder) == 2 and folder[1].isdigit():
+        return folder[1]  # digit
     else:  # lowercase
         return folder
 

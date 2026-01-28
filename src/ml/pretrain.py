@@ -6,7 +6,7 @@
 # Generic pretraining script for any model variant: pretrains on locally
 # collected data
 
-from src.data.utils import build_char_map, build_inverse_char_map, char_to_folder_name, load_chars, RAW_MOUSE_DATA_DIR
+from src.data.utils import build_char_map, build_inverse_char_map, char_to_folder_name, load_chars, RAW_MOUSE_DATA_DIR, NUM_FINETUNE_CLASSES
 from src.ml.architectures.cnn import StrokeNet
 from src.ml.architectures.lstm import StrokeLSTM
 import lightning as L
@@ -50,7 +50,7 @@ def main():
     L.seed_everything(args.seed, workers=True)
     if args.model == "lstm":
         model = StrokeLSTM(
-            num_classes=53,
+            num_classes=NUM_FINETUNE_CLASSES,
             hidden_size=args.hidden_size,
             num_layers=args.num_layers,
             class_weights=data_module.class_weights,

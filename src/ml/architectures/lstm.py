@@ -13,23 +13,24 @@ from torch.nn.utils.rnn import PackedSequence
 
 class StrokeLSTM(L.LightningModule):
     """
-    LSTM for classifying mouse *velocity* data into letters (currently 53, but
-    most up to date in data.utils.build_char_map())
+    LSTM for classifying mouse *velocity* data into characters.
     
     Input: (B, T, 2) PackedSequence tensor
     Output: logits over num_classes
+
+    Index scheme (63 base classes): a-z (0-25), A-Z (26-51), 0-9 (52-61), space (62)
     
-    There is no seperation of pretraining and finetuning for this module, as I
-    lack access to an abundant pretraining dataset for this time series task. 
+    No separation of pretraining/finetuning for this module - lacks abundant
+    pretraining dataset for time series approach.
     """
     def __init__(
         self, 
-        num_classes: int = 53, 
-        hidden_size=64, # control model size
-        num_layers=2, # size of hidden layer stack
-        class_weights=None, # for imbalanced classes
-        lr=1e-3, # learning rate
-        dropout=0.1, # dropout in LSTM
+        num_classes: int = 63,  # default finetune classes
+        hidden_size=64,  # control model size
+        num_layers=2,  # size of hidden layer stack
+        class_weights=None,  # for imbalanced classes
+        lr=1e-3,  # learning rate
+        dropout=0.1,  # dropout in LSTM
     ):
         super().__init__()
         self.save_hyperparameters()

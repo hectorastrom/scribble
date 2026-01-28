@@ -16,6 +16,7 @@ from src.data.utils import (
     build_char_map,
     build_img,
     velocities_to_positions,
+    NUM_FINETUNE_CLASSES,
 )
 from src.ml.architectures.cnn import StrokeNet
 from src.ml.utils import forward_pass
@@ -87,7 +88,7 @@ def get_model() -> StrokeNet:
     if _MODEL is None:
         model = StrokeNet.load_from_checkpoint(
             DEFAULT_CKPT_PATH,
-            num_classes=53,
+            num_classes=NUM_FINETUNE_CLASSES,
         )
         model.eval()
         model.to(t.device("cpu"))

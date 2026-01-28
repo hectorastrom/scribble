@@ -536,7 +536,7 @@ export default function scribbleBlogPost() {
 
       <p>
         The model runs on a lightweight CNN that processes your mouse velocity
-        data and classifies it into one of 53 characters...
+        data and classifies it into one of 63 characters (a-z, A-Z, 0-9, space)...
       </p>
     </article>
   );
