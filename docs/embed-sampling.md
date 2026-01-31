@@ -17,6 +17,23 @@ Write a `knn_forward_pass(model, img, k)` function in `src.ml.utils` that return
 embeddings to the embedded `img` from `stroke_embeds`, a `(num_strokes, embed_dim)` embedding table learned in the
 first offline fine-tuning stage.
 
+
+```python
+# Example knn_forward_pass
+def knn_forward_pass(model, img, k=1):
+    z = F.normalize(model(img), dim=-1) # normalize across embed dim (B, D)
+    E = F.normalize(model.stroke_embeds.weight, dim=-1) # (C, D)
+    # squared euclidean distance
+    # z.unsqueeze(1): (B, 1, D)
+    # E.unsqueeze(0): (1, C, D)
+    # z-E : (B, C, D) broadcast
+    # sum((z-E)**2, dim=-1): (B, C)
+    diff = z.unsqueeze(1) - E.unsqueeze(0)
+    dist2 = (dist ** dist).sum(dim=-1)
+    vals, idx = torch.topk(dist2, k, largest=False) # nearest neighbors
+    return idx
+```
+
 **There are three primary lifecycles for this system:**
 
 1. Offline training (fine-tuning after EMNIST pretraining)
@@ -44,7 +61,8 @@ The implementation occurs at three stages.
         - `stroke_embeds : nn.Embedding`
         - `stroke_map: dict[int, str]` 
             - Q: should we use a stroke object, with e.g. `stroke_shorthand`,
-              `stroke_filename`
+              `stroke_filename`? 
+            - For starters this is just `src.data.utils.build_char_map()`
 2. `src.ml.finetune` - add arg to enable embedding training (offline training)
 3. `src.decode.real_time` - check `using_embeds` toggle of CNN to modify stroke
    detection, choosing to use `knn_forward_pass` instead
