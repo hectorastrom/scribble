@@ -74,17 +74,12 @@ intend to solve them:
 - [-] Try an alternative timeseries representation (rather than 2D images -
   we're currently throwing away information)
     - [ ] Add support for different sampling rates (15ms vs. 10ms)
-- [ ] (bonus) build a cute scribble UI 
 - [ ] Think of a way to have people collect data for me...
 - [ ] Add "not-a-char" stroke support so model can express uncertainty
 - [ ] Add meta learning 
-  - Or use model only as an embedder, and add new characters by embedding it.
-    Sampling is done with NN on all the embeddings (see periodic episodic learning)
-
-## Other free wins
-1. Collect data for longer (biggest)
-2. Increase model capacity
-3. Improve model architecture
-4. Move to timeseries stroke classification
-5. Include information about stroke sizes & relative velocities
+  - [-] Or use model only as an embedder, and add new characters by embedding it.
+    Sampling is done with NN on all the embeddings (see periodic episodic
+    learning)
+- [ ] Include information about stroke sizes & relative velocities
   - Important for upper vs. lowercase
+

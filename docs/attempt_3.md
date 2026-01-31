@@ -43,3 +43,14 @@ More fixes:
 - Upping batch size only speeds things up. 256 = 60% usage; 512 = 70% usage
 - Adding dropout of 0.1 doesn't improve accuracy (62% test)
 
+-- 
+01.31.26
+Have increased accuracy to a maximum of `69%`, achieved over 100 epochs on a
+`471K` param LSTM (4 layers, 128 hidden) and `1216` train samples (added digits,
+which inflated sample count over 63 classes). 
+
+Given that this is 10 more classes than previously tested on, I can attribute
+the increase in accuracy to the greater model capacity (`471K` is the largest
+LSTM trained yet). It's still NOT good, but only `~12%` off from the current
+63-class CNN (which, although having a pretraining phase, is still much faster
+to train).
