@@ -39,12 +39,6 @@ All detailed results can be found in [attempt 2 results](docs/attempt_2.md)
 
 
 ## Data
-My data and checkpoints can be downloaded from a public `s3` bucket.
-
-To download my raw_mouse_data (as a base for finetuning):
-`aws s3 sync s3://hectorastrom-str-mouse/raw_mouse_data ./raw_mouse_data`
-
-I intend to upload checkpoints later, when there is more interesting diversity
-available.
+Download my raw_mouse_data (as a base for finetuning) from a public Google Drive folder [HERE](https://drive.google.com/drive/folders/1Jx-_nzswDbaWGWwAS87K4sdrVNIOv87W?usp=sharing).
 
 ---
