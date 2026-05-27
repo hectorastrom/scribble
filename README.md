@@ -38,7 +38,9 @@ feels pretty good online, too.
 All detailed results can be found in [attempt 2 results](docs/attempt_2.md)
 
 
-## Data
+## Data & Checkpoints
 Download my raw_mouse_data (as a base for finetuning) from a public Google Drive folder [HERE](https://drive.google.com/drive/folders/1Jx-_nzswDbaWGWwAS87K4sdrVNIOv87W?usp=sharing).
+
+Download trained model checkpoints — of different architectures and class count heads — at the Drive folder [HERE](https://drive.google.com/drive/folders/180IwTd-S6KBkDkLBXK6kgvWuEV2iRU4M?usp=sharing)
 
 ---
